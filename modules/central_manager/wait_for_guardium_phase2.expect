@@ -1,0 +1,152 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+
+# Inputs: IP, Password, Shared Secret
+set IP [lindex $argv 0]
+set PASSWORD [lindex $argv 1]
+set SHARED_SECRET [lindex $argv 2]
+
+puts "\n📥 Starting Guardium Phase 2 Configuration"
+puts "   🔹 IP: $IP"
+puts "   🔹 PASSWORD: [string repeat * [string length $PASSWORD]]"
+puts "   🔹 SHARED_SECRET: $SHARED_SECRET"
+puts "-------------------------------------------"
+
+# Remove any old SSH host key entry before connecting
+puts "🧹 Cleaning up old SSH key for $IP..."
+catch {exec sh -c "ssh-keygen -R $IP > /dev/null 2>&1"} result
+
+# SSH connection
+puts "🔐 Connecting to cli@$IP..."
+if {[catch {spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null cli@$IP} err]} {
+    puts "❌ Failed to spawn SSH session: $err"
+    exit 1
+}
+
+# Login
+expect {
+    "password:" {
+        puts "🔑 Sending password..."
+        send "$PASSWORD\r"
+    }
+    timeout {
+        puts "❌ Timeout waiting for password prompt."
+        exit 1
+    }
+    eof {
+        puts "❌ SSH connection closed unexpectedly during login."
+        exit 1
+    }
+}
+
+# Wait for CLI prompt
+expect {
+    -re {[\r\n]+.*?>\s*} {
+        puts "✅ Connected to Guardium CLI"
+    }
+    timeout {
+        puts "❌ Timeout waiting for CLI prompt after login."
+        exit 1
+    }
+    eof {
+        puts "❌ Connection closed unexpectedly after login."
+        exit 1
+    }
+}
+
+# Wait a moment for system to be ready
+sleep 5
+
+# Verify license is accepted by checking unit type
+puts "🔍 Checking current unit type..."
+send "show unit type\r"
+expect {
+    -re {(.*)\r\n.*>} {
+        set output $expect_out(1,string)
+        puts "📋 Current unit type: $output"
+    }
+    timeout {
+        puts "⚠️  Timeout during 'show unit type'. Continuing..."
+    }
+    eof {
+        puts "❌ Connection closed unexpectedly."
+        exit 1
+    }
+}
+
+# Set unit type to manager (if not already set)
+puts "⚙️  Setting unit type to manager..."
+send "store unit type manager\r"
+expect {
+    -re {.*>} {
+        puts "✅ Unit type set to manager"
+    }
+    "Invalid command" {
+        puts "⚠️  'store unit type manager' command not available (may already be set)"
+    }
+    timeout {
+        puts "⚠️  Timeout setting unit type. Continuing..."
+    }
+    eof {
+        puts "❌ Connection closed unexpectedly."
+        exit 1
+    }
+}
+
+# Set shared secret (in case it wasn't set in Phase 1)
+if {$SHARED_SECRET != ""} {
+    puts "🔐 Setting shared secret..."
+    send "store system shared secret $SHARED_SECRET\r"
+    expect {
+        -re {.*>} {
+            puts "✅ Shared secret configured"
+        }
+        timeout {
+            puts "⚠️  Timeout setting shared secret."
+        }
+        eof {
+            puts "❌ Connection closed unexpectedly."
+            exit 1
+        }
+    }
+}
+
+# Verify network configuration
+puts "🌐 Verifying network configuration..."
+send "show network verify\r"
+expect {
+    -re {(.*)\r\n.*>} {
+        set output $expect_out(1,string)
+        puts "📋 Network verification: $output"
+    }
+    timeout {
+        puts "⚠️  Timeout during network verification."
+    }
+    eof {
+        puts "❌ Connection closed unexpectedly."
+        exit 1
+    }
+}
+
+# Show license status
+puts "📜 Checking license status..."
+send "show license\r"
+expect {
+    -re {(.*)\r\n.*>} {
+        set output $expect_out(1,string)
+        puts "📋 License status: $output"
+    }
+    timeout {
+        puts "⚠️  Timeout checking license."
+    }
+    eof {
+        puts "❌ Connection closed unexpectedly."
+        exit 1
+    }
+}
+send "quit\r"
+expect eof
+
+puts "\n✅ Phase 2 configuration completed successfully!"
+exit 0

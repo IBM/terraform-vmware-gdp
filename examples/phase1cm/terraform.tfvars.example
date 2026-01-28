@@ -1,0 +1,8 @@
+# vCenter Connection Details
+vcenter_server   = "vcenter.example.com"
+vcenter_username = "administrator@vsphere.local"
+vcenter_password = "MyVCENTERPassword"
+
+# Automation Timing
+boot_menu_wait_seconds   = 10
+installation_wait_minutes = 25 #Do not select time less than 20min, some process still running during the installation process. Afer 25 min the console will start to run the cli command

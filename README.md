@@ -1,78 +1,239 @@
-<!-- This should be the location of the title of the repository, normally the short name -->
-# repo-template
+# Automated installation of GDP appliances on VMware
 
-<!-- Build Status, is a great thing to have at the top of your repository, it shows that you take your CI/CD as first class citizens -->
-<!-- [![Build Status](https://travis-ci.org/jjasghar/ibm-cloud-cli.svg?branch=master)](https://travis-ci.org/jjasghar/ibm-cloud-cli) -->
-
-<!-- Not always needed, but a scope helps the user understand in a short sentance like below, why this repo exists -->
 ## Scope
 
-The purpose of this project is to provide a template for new open source repositories.
+The modules contained here automate installation of GDP appliances onto VMware.
 
-<!-- A more detailed Usage or detailed explaination of the repository here -->
+The following are supported:
+
+* Central Manager
+* Aggregator
+* Collector
+
+For detailed instructions, including requirements and how to install them, see the [full instructions document](docs/FULL_INSTRUCTIONS.md).
+
+## Summary of process
+
+```
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│      Plan the installation, gather parameter       │
+│                                                    │
+└────────────────────────────────────────────────────┘
+                          │
+                          │
+                          ▼
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│             Create the Central Manager             │
+│                                                    │
+└────────────────────────────────────────────────────┘
+                          │
+                          │
+                          ▼
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│            Manually accept the  license            │
+│                                                    │
+└────────────────────────────────────────────────────┘
+                          │
+                          │
+                          ▼
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│             Run script to convert to CM            │
+│                                                    │
+└────────────────────────────────────────────────────┘
+                          │
+                          │
+                          ▼
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│               Create the Aggregators               │
+│                                                    │
+└────────────────────────────────────────────────────┘
+                          │
+                          │
+                          ▼
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│               Create the Collectors                │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+## Process flow
+
+1. Connect to VMware. Plan the installation.
+    * VMware info and structure
+    * IP addresses and VM locations
+    * ISO datastore info
+    * VM parameters
+
+2. Edit the parameters for the Central Manager.
+2. Run the Terraform process to create a Central Manager.
+3. Connect to the GDP appliance by web browser to accept GDP license.
+4. Run the script to convert the GDP appliance to a CM.
+4. Edit the parameters for the Aggregators.
+5. Run the Terraform process to create the Aggregators.
+6. Edit the parameters for the Collectors.
+7. Run the Terraform process to create the Collectors.
+
+## Prerequisites
+
+### vSphere
+
+* Ability to login to vSphere with privileges to create new VMs and access the required datastores.
+
+### Linux
+
+* A clone of the GitHub repository for the Terraform scripts.
+* Expect
+* Microsoft Powershell
+* Python
+
+The documentation here assumes you will be using a Linux computer to run the Terrafrom process. Instructions to install these items will vary depending upon which Linux distribution you are using.
+See the [full instructions document](docs/FULL_INSTRUCTIONS.md) for complete details of the requirements.
+
+### GDP
+
+* License (only required if you are creating a central manager)
+
 ## Usage
 
-This repository contains some example best practices for open source repositories:
+### Central Manager
 
-* [LICENSE](LICENSE)
-* [README.md](README.md)
-* [CONTRIBUTING.md](CONTRIBUTING.md)
-* [MAINTAINERS.md](MAINTAINERS.md)
-* [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-<!-- A Changelog allows you to track major changes and things that happen, https://github.com/github-changelog-generator/github-changelog-generator can help automate the process -->
-* [CHANGELOG.md](CHANGELOG.md)
+Create a GDP Central Manager on VMware:
 
-> These are optional
+```hcl
+module "central_manager" {
+  source = "../../modules/central_manager"
+  for_each = { for inst in local.instances : inst.vm_name => inst }
 
-<!-- The following are OPTIONAL, but strongly suggested to have in your repository. -->
-* [dco.yml](.github/dco.yml) - This enables DCO bot for you, please take a look https://github.com/probot/dco for more details.
-* [travis.yml](.travis.yml) - This is a example `.travis.yml`, please take a look https://docs.travis-ci.com/user/tutorial/ for more details.
+  # vCenter Connection Details (from terraform.tfvars)
+  vcenter_server   = var.vcenter_server
+  vcenter_username = var.vcenter_username
+  vcenter_password = var.vcenter_password
 
-These may be copied into a new or existing project to make it easier for developers not on a project team to collaborate.
+  # vCenter Environment Configuration (from instances.json)
+  datacenter_name    = each.value.datacenter_name
+  cluster_name       = each.value.cluster_name
+  datastore_name     = each.value.datastore_name
+  network_name       = each.value.network_name
+  esxi_host_name     = each.value.esxi_host_name
+  iso_datastore_name = each.value.iso_datastore_name
 
-<!-- A notes section is useful for anything that isn't covered in the Usage or Scope. Like what we have below. -->
-## Notes
+  # VM Configuration (from instances.json)
+  vm_name        = each.value.vm_name
+  vm_folder      = each.value.vm_folder
+  vm_cpu_count   = each.value.vm_cpu_count
+  vm_cpu_cores   = each.value.vm_cpu_cores
+  vm_memory_mb   = each.value.vm_memory_mb
+  vm_disk_gb     = each.value.vm_disk_gb
+  guest_id       = "rhel8_64Guest"  # vCenter 7.x
+  # guest_id     = "rhel9_64Guest" # vCenter 8.x
 
-**NOTE: While this boilerplate project uses the Apache 2.0 license, when
-establishing a new repo using this template, please use the
-license that was approved for your project.**
+  # ISO Configuration (from instances.json)
+  guardium_iso_path = each.value.guardium_iso_path
+}
+```
 
-**NOTE: This repository has been configured with the [DCO bot](https://github.com/probot/dco).
-When you set up a new repository that uses the Apache license, you should
-use the DCO to manage contributions. The DCO bot will help enforce that.
-Please contact one of the IBM GH Org stewards.**
 
-<!-- Questions can be useful but optional, this gives you a place to say, "This is how to contact this project maintainers or create PRs -->
-If you have any questions or issues you can create a new [issue here][issues].
+### Aggregator
 
-Pull requests are very welcome! Make sure your patches are well tested.
-Ideally create a topic branch for every separate change you make. For
-example:
+Create a GDP Aggregator on VMware:
 
-1. Fork the repo
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Added some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+```hcl
+module "aggregator" {
+  source = "../../modules/aggregator"
+  for_each = { for inst in local.instances : inst.vm_name => inst }
+
+  # vCenter Connection Details (from terraform.tfvars)
+  vcenter_server   = var.vcenter_server
+  vcenter_username = var.vcenter_username
+  vcenter_password = var.vcenter_password
+
+  # vCenter Environment Configuration (from instances.json)
+  datacenter_name    = each.value.datacenter_name
+  cluster_name       = each.value.cluster_name
+  datastore_name     = each.value.datastore_name
+  network_name       = each.value.network_name
+  esxi_host_name     = each.value.esxi_host_name
+  iso_datastore_name = each.value.iso_datastore_name
+
+  # VM Configuration (from instances.json)
+  vm_name        = each.value.vm_name
+  vm_folder      = each.value.vm_folder
+  vm_cpu_count   = each.value.vm_cpu_count
+  vm_cpu_cores   = each.value.vm_cpu_cores
+  vm_memory_mb   = each.value.vm_memory_mb
+  vm_disk_gb     = each.value.vm_disk_gb
+  guest_id       = "rhel8_64Guest"  # vCenter 7.x
+  # guest_id     = "rhel9_64Guest" # vCenter 8.x
+
+  # ISO Configuration (from instances.json)
+  guardium_iso_path = each.value.guardium_iso_path
+}
+```
+
+
+### Collector
+
+Create a GDP Collector on VMware:
+
+```hcl
+module "collector" {
+  source = "../../modules/collector"
+  for_each = { for inst in local.instances : inst.vm_name => inst }
+
+  # vCenter Connection Details (from terraform.tfvars)
+  vcenter_server   = var.vcenter_server
+  vcenter_username = var.vcenter_username
+  vcenter_password = var.vcenter_password
+
+  # vCenter Environment Configuration (from instances.json)
+  datacenter_name    = each.value.datacenter_name
+  cluster_name       = each.value.cluster_name
+  datastore_name     = each.value.datastore_name
+  network_name       = each.value.network_name
+  esxi_host_name     = each.value.esxi_host_name
+  iso_datastore_name = each.value.iso_datastore_name
+
+  # VM Configuration (from instances.json)
+  vm_name        = each.value.vm_name
+  vm_folder      = each.value.vm_folder
+  vm_cpu_count   = each.value.vm_cpu_count
+  vm_cpu_cores   = each.value.vm_cpu_cores
+  vm_memory_mb   = each.value.vm_memory_mb
+  vm_disk_gb     = each.value.vm_disk_gb
+  guest_id       = "rhel8_64Guest"  # vCenter 7.x
+  # guest_id     = "rhel9_64Guest" # vCenter 8.x
+
+  # ISO Configuration (from instances.json)
+  guardium_iso_path = each.value.guardium_iso_path
+}
+```
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## Support
+
+For issues and questions:
+- Create an issue in this repository
+- Contact the maintainers listed in [MAINTAINERS.md](MAINTAINERS.md)
 
 ## License
 
-All source files must include a Copyright and License header. The SPDX license header is 
-preferred because it can be easily scanned.
-
-If you would like to see the detailed LICENSE click [here](LICENSE).
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
 ```text
 #
-# Copyright IBM Corp. {Year project was created} - {Current Year}
+# Copyright IBM Corp. 2025
 # SPDX-License-Identifier: Apache-2.0
 #
 ```
+
 ## Authors
 
-Optionally, you may include a list of authors, though this is redundant with the built-in
-GitHub list of contributors.
-
-- Author: New OpenSource IBMer <new-opensource-ibmer@ibm.com>
-
-[issues]: https://github.com/IBM/repo-template/issues/new
+Module is maintained by IBM with help from [these awesome contributors](https://github.com/IBM/terraform-guardium-datastore-va/graphs/contributors).
